@@ -259,6 +259,17 @@
             }
         }
 
+        async function getAddressFromCoordinates(lat, lon) {
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=vi`);
+                const data = await response.json();
+                return data.display_name || 'Không thể lấy địa chỉ chính xác';
+            } catch (error) {
+                console.error('Error getting address:', error);
+                return 'Không thể lấy địa chỉ';
+            }
+        }
+
         async function updateOverlayInfo() {
             const currentTime = moment().tz("Asia/Ho_Chi_Minh");
             const date = currentTime.format('YYYY-MM-DD');
@@ -267,18 +278,19 @@
             try {
                 const position = await getLocation();
                 const [latitude, longitude] = position.split(',');
+                const address = await getAddressFromCoordinates(latitude, longitude);
 
                 cameraOverlay.innerHTML = `
-                    Vị trí: ${latitude}, ${longitude}<br>
-                    Địa chỉ: Phường Thới Hoà, Thành phố Bến Cát, Tỉnh Bình Dương, 75900, Việt Nam<br>
-                    Thời gian: ${date} ${timeStr}
-                `;
+            Vị trí: ${latitude}, ${longitude}<br>
+            Địa chỉ: ${address}<br>
+            Thời gian: ${date} ${timeStr}
+        `;
             } catch (error) {
                 console.error('Error updating overlay info:', error);
                 cameraOverlay.innerHTML = `
-                    Không thể lấy vị trí<br>
-                    Thời gian: ${date} ${timeStr}
-                `;
+            Không thể lấy vị trí<br>
+            Thời gian: ${date} ${timeStr}
+        `;
             }
         }
 
