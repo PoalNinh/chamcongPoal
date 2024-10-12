@@ -148,6 +148,38 @@
         #cameraContainer {
             position: relative;
         }
+
+        #loginForm {
+            max-width: 300px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        #loginForm input[type="text"],
+        #loginForm input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        #loginForm button {
+            width: 100%;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #loginForm button:hover {
+            background-color: #45a049;
+        }
     </style>
 </head>
 
@@ -156,9 +188,23 @@
     <div id="loadingBox" class="loading">Đang gửi dữ liệu...</div>
     <div id="alertBox" class="alert"></div>
 
-    <div class="button-container">
-        <button id="checkInBtn">Check In</button>
-        <button id="checkOutBtn">Check Out</button>
+    <div id="loginForm" style="display: block;">
+        <h2>Đăng nhập</h2>
+        <input type="text" id="username" placeholder="Tên đăng nhập" required>
+        <input type="password" id="password" placeholder="Mật khẩu" required>
+        <div>
+            <input type="checkbox" id="rememberLogin">
+            <label for="rememberLogin">Ghi nhớ đăng nhập</label>
+        </div>
+        <button onclick="login()">Đăng nhập</button>
+    </div>
+
+    <div id="checkInOutChoice" style="display: none;">
+        <div class="button-container">
+            <button id="checkInBtn">Check In</button>
+            <button id="checkOutBtn">Check Out</button>
+        </div>
+        <button id="logoutBtn">Đăng xuất</button>
     </div>
 
     <div id="cameraContainer" style="display:none;">
@@ -194,7 +240,8 @@
         const cameraOverlay = document.getElementById('cameraOverlay');
         const checkInBtn = document.getElementById('checkInBtn');
         const checkOutBtn = document.getElementById('checkOutBtn');
-
+        const logoutBtn = document.getElementById('logoutBtn');
+        let users = []
         let stream;
         let facingMode = "user";
 
@@ -238,7 +285,7 @@
                         ...data
                     })
                 });
-                console.log('API Response:', response); // Log the full response
+                console.log('API Response:', response);
                 return response;
             } catch (error) {
                 console.error('API request failed:', error);
@@ -248,6 +295,7 @@
                 throw error;
             }
         }
+
         async function checkExistingRecord(idChamCong) {
             try {
                 const response = await apiRequest('ChamCong', 'Find', {}, {
@@ -373,13 +421,69 @@
                 }
             });
         }
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const rememberLogin = document.getElementById('rememberLogin').checked;
+
+            showLoading();
+
+            try {
+                const result = await apiRequest('DSNV', 'Find', {
+                    Rows: [],
+                    Properties: {
+                        Selector: `Filter(DSNV, and( [username] = "${username}" , [password] = "${password}"))`
+
+                    }
+                });
+
+                if (result && Array.isArray(result) && result.length === 1) {
+                    const user = result[0];
+                    if (user.password === password) {
+                        if (rememberLogin) {
+                            localStorage.setItem('username', username);
+                            localStorage.setItem('fullName', user['Họ và Tên']); // Lưu Họ và Tên
+                            localStorage.setItem('loginToken', 'someTokenValue');
+                        }
+                        document.getElementById('loginForm').style.display = 'none';
+                        document.getElementById('checkInOutChoice').style.display = 'block';
+                        showFullScreenMessage('Đăng nhập thành công!');
+                        users = result;
+
+                    } else {
+                        showAlert('Mật khẩu không đúng!');
+                    }
+                } else {
+                    showAlert('Tên đăng nhập không tồn tại!');
+                }
+            } catch (error) {
+                console.error('Lỗi đăng nhập:', error);
+                showAlert(`Lỗi đăng nhập: ${error.message || 'Không xác định'}. Vui lòng thử lại sau.`);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('username');
+            localStorage.removeItem('fullName');
+            localStorage.removeItem('loginToken');
+            document.getElementById('checkInOutChoice').style.display = 'none';
+            document.getElementById('cameraContainer').style.display = 'none';
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+        }
+
         async function handleCheckInOut(type) {
             showLoading();
-            const name = "Nguyễn Văn b"; // Thay thế bằng tên thực tế của người dùng
+            const fullName = users[0]['Họ và Tên'];
+            console.log(fullName)
             const currentTime = moment().tz("Asia/Ho_Chi_Minh");
             const date = currentTime.format('DD/MM/YYYY');
             const timeStr = currentTime.format('HH:mm:ss');
-            const idChamCong = `${name}${date}`;
+            const idChamCong = `${fullName}${date}`;
 
             try {
                 const existingRecord = await checkExistingRecord(idChamCong);
@@ -387,13 +491,12 @@
                 let newData = {
                     "ID CV": idChamCong,
                     "NGÀY": date,
-                    "HỌ VÀ TÊN": name,
+                    "HỌ VÀ TÊN": users['Họ và Tên'],
                     "GHI CHÚ": `Check ${type} qua API`
                 };
                 if (existingRecord[0]) {
                     if (type === 'in') {
                         if (existingRecord[0]['ID CV'] === idChamCong) {
-
                             const confirmOverwrite = confirm(`Bạn đã check-in lúc ${existingRecord[0].IN}. Bạn có muốn ghi đè không?`);
                             if (!confirmOverwrite) {
                                 hideLoading();
@@ -425,9 +528,9 @@
                                 return;
                             }
                             newData["LỊCH SỬ OUT"] = `${existingRecord[0]["LỊCH SỬ OUT"] || ""};
-                         ${name} Đã check out vào : (${date} ${timeStr})`;
+                         ${fullName} Đã check out vào : (${date} ${timeStr})`;
                         } else {
-                            newData["LỊCH SỬ OUT"] = `${name} Đã check out vào : (${date} ${timeStr})`;
+                            newData["LỊCH SỬ OUT"] = `${fullName} Đã check out vào : (${date} ${timeStr})`;
                         }
                         newData["OUT"] = timeStr;
                         newData["HÌNH ẢNH OUT"] = await captureImage();
@@ -442,8 +545,7 @@
 
                 const action = existingRecord[0] ? 'Edit' : 'Add';
                 const response = await apiRequest('ChamCong', action, { Rows: [newData] });
-                console.log('API Response:', response); // Log the full response
-                return response;
+                console.log('API Response:', response);
                 if (response && response.Success) {
                     showFullScreenMessage(`Đã gửi thông tin check-${type} thành công!`);
                 } else {
@@ -454,9 +556,36 @@
                 if (error.responseJSON) {
                     console.error('API error details:', error.responseJSON);
                 }
-                throw error;
+                showAlert(`Lỗi khi gửi dữ liệu: ${error.message || 'Không xác định'}. Vui lòng thử lại sau.`);
             } finally {
                 hideLoading();
+            }
+        }
+
+        function updateButtonVisibility(state) {
+            switch (state) {
+                case 'in':
+                case 'out':
+                    checkInBtn.style.display = 'none';
+                    checkOutBtn.style.display = 'none';
+                    logoutBtn.style.display = 'block';
+                    break;
+                case 'initial':
+                    checkInBtn.style.display = 'block';
+                    checkOutBtn.style.display = 'block';
+                    logoutBtn.style.display = 'block';
+                    break;
+            }
+        }
+
+        function checkLoginStatus() {
+            const savedUsername = localStorage.getItem('username');
+            const savedToken = localStorage.getItem('loginToken');
+            if (savedUsername && savedToken) {
+                document.getElementById('username').value = savedUsername;
+                document.getElementById('loginForm').style.display = 'none';
+                document.getElementById('checkInOutChoice').style.display = 'block';
+                updateButtonVisibility('initial');
             }
         }
 
@@ -471,42 +600,31 @@
 
         backBtn.addEventListener('click', () => {
             cameraContainer.style.display = 'none';
-            $('#checkInOutChoice').show();  // Hiển thị lại container chứa nút Check In và Check Out
+            checkInOutChoice.style.display = 'block';
             updateButtonVisibility('initial');
         });
 
-        $('#checkInBtn').on('click', () => {
-            $('#checkInOutChoice').hide();  // Ẩn container chứa nút Check In và Check Out
-            $('#cameraContainer').show();
-            $('#captureOutBtn').hide();
-            $('#captureBtn').show();
+        checkInBtn.addEventListener('click', () => {
+            checkInOutChoice.style.display = 'none';
+            cameraContainer.style.display = 'block';
+            captureOutBtn.style.display = 'none';
+            captureBtn.style.display = 'block';
             updateButtonVisibility('in');
         });
 
-        $('#checkOutBtn').on('click', () => {
-            $('#checkInOutChoice').hide();  // Ẩn container chứa nút Check In và Check Out
-            $('#cameraContainer').show();
-            $('#captureBtn').hide();
-            $('#captureOutBtn').show();
+        checkOutBtn.addEventListener('click', () => {
+            checkInOutChoice.style.display = 'none';
+            cameraContainer.style.display = 'block';
+            captureBtn.style.display = 'none';
+            captureOutBtn.style.display = 'block';
             updateButtonVisibility('out');
         });
 
-        function updateButtonVisibility(state) {
-            switch (state) {
-                case 'in':
-                case 'out':
-                    checkInBtn.style.display = 'none';
-                    checkOutBtn.style.display = 'none';
-                    break;
-                case 'initial':
-                    checkInBtn.style.display = 'block';
-                    checkOutBtn.style.display = 'block';
-                    break;
-            }
-        }
+        logoutBtn.addEventListener('click', logout);
 
-        // Initialize
-        $(document).ready(() => {
+        // Initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            checkLoginStatus();
             updateButtonVisibility('initial');
             startCamera();
         });
