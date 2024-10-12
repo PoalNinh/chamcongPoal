@@ -233,7 +233,7 @@
                 const response = await apiRequest('ChamCong', 'Find', {}, {
                     Selector: `Filter(ChamCong,[ID CV]="${idChamCong}")`
                 });
-               
+
                 return response;
             } catch (error) {
                 console.error('Error checking existing record:', error);
@@ -312,7 +312,7 @@
                     "HỌ VÀ TÊN": name,
                     "GHI CHÚ": `Check ${type} qua API`
                 };
-
+                if (existingRecord[0]){
                 if (type === 'in') {
                     if (existingRecord[0]['ID CV'] === idChamCong) {
 
@@ -354,9 +354,9 @@
                     newData["OUT"] = timeStr;
                     newData["HÌNH ẢNH OUT"] = await captureImage();
                     newData["ĐỊA CHỈ OUT"] = await getLocation();
-                }
+                }}  
 
-                const action = existingRecord ? 'Edit' : 'Add';
+                const action = existingRecord[0] ? 'Edit' : 'Add';
                 const response = await apiRequest('ChamCong', action, { Rows: [newData] });
                 console.log('API Response:', response); // Log the full response
                 return response;
