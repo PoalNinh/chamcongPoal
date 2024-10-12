@@ -192,6 +192,8 @@
         const alertBox = document.getElementById('alertBox');
         const loadingBox = document.getElementById('loadingBox');
         const cameraOverlay = document.getElementById('cameraOverlay');
+        const checkInBtn = document.getElementById('checkInBtn');
+        const checkOutBtn = document.getElementById('checkOutBtn');
 
         let stream;
         let facingMode = "user";
@@ -469,26 +471,43 @@
 
         backBtn.addEventListener('click', () => {
             cameraContainer.style.display = 'none';
-            checkInOutChoice.style.display = 'block';
+            $('#checkInOutChoice').show();  // Hiển thị lại container chứa nút Check In và Check Out
+            updateButtonVisibility('initial');
         });
 
         $('#checkInBtn').on('click', () => {
-            $('#checkInOutChoice').hide();
+            $('#checkInOutChoice').hide();  // Ẩn container chứa nút Check In và Check Out
             $('#cameraContainer').show();
             $('#captureOutBtn').hide();
             $('#captureBtn').show();
+            updateButtonVisibility('in');
         });
 
         $('#checkOutBtn').on('click', () => {
-            $('#checkInOutChoice').hide();
+            $('#checkInOutChoice').hide();  // Ẩn container chứa nút Check In và Check Out
             $('#cameraContainer').show();
             $('#captureBtn').hide();
             $('#captureOutBtn').show();
+            updateButtonVisibility('out');
         });
+
+        function updateButtonVisibility(state) {
+            switch (state) {
+                case 'in':
+                case 'out':
+                    checkInBtn.style.display = 'none';
+                    checkOutBtn.style.display = 'none';
+                    break;
+                case 'initial':
+                    checkInBtn.style.display = 'block';
+                    checkOutBtn.style.display = 'block';
+                    break;
+            }
+        }
 
         // Initialize
         $(document).ready(() => {
-            $('#checkInOutChoice').show();
+            updateButtonVisibility('initial');
             startCamera();
         });
     </script>
