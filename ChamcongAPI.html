@@ -132,6 +132,22 @@
             border-color: #4CAF50;
             background-color: #f4f4f4;
         }
+
+        #cameraOverlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 100;
+        }
+
+        #cameraContainer {
+            position: relative;
+        }
     </style>
 </head>
 
@@ -147,6 +163,7 @@
 
     <div id="cameraContainer" style="display:none;">
         <video id="camera" autoplay playsinline></video>
+        <div id="cameraOverlay"></div>
         <div class="button-container">
             <button id="switchCameraBtn"><i class="fas fa-sync-alt"></i>Đổi Camera</button>
             <button id="captureBtn"><i class="fas fa-camera"></i>Chụp ảnh vào</button>
@@ -174,6 +191,7 @@
         const infoDisplay = document.getElementById('infoDisplay');
         const alertBox = document.getElementById('alertBox');
         const loadingBox = document.getElementById('loadingBox');
+        const cameraOverlay = document.getElementById('cameraOverlay');
 
         let stream;
         let facingMode = "user";
@@ -240,6 +258,30 @@
                 throw error;
             }
         }
+
+        async function updateOverlayInfo() {
+            const currentTime = moment().tz("Asia/Ho_Chi_Minh");
+            const date = currentTime.format('YYYY-MM-DD');
+            const timeStr = currentTime.format('HH:mm:ss');
+
+            try {
+                const position = await getLocation();
+                const [latitude, longitude] = position.split(',');
+
+                cameraOverlay.innerHTML = `
+                    Vị trí: ${latitude}, ${longitude}<br>
+                    Địa chỉ: Phường Thới Hoà, Thành phố Bến Cát, Tỉnh Bình Dương, 75900, Việt Nam<br>
+                    Thời gian: ${date} ${timeStr}
+                `;
+            } catch (error) {
+                console.error('Error updating overlay info:', error);
+                cameraOverlay.innerHTML = `
+                    Không thể lấy vị trí<br>
+                    Thời gian: ${date} ${timeStr}
+                `;
+            }
+        }
+
         // Camera and image capture functions
         async function startCamera() {
             if (stream) {
@@ -250,6 +292,9 @@
                     video: { facingMode: facingMode }
                 });
                 camera.srcObject = stream;
+                updateOverlayInfo();
+                // Cập nhật thông tin mỗi giây
+                setInterval(updateOverlayInfo, 1000);
             } catch (err) {
                 console.error("Không thể truy cập camera:", err);
                 showAlert("Không thể truy cập camera. Vui lòng kiểm tra quyền truy cập.");
@@ -261,7 +306,26 @@
                 const canvas = document.createElement('canvas');
                 canvas.width = camera.videoWidth;
                 canvas.height = camera.videoHeight;
-                canvas.getContext('2d').drawImage(camera, 0, 0);
+                const ctx = canvas.getContext('2d');
+
+                // Vẽ video stream lên canvas
+                ctx.drawImage(camera, 0, 0);
+
+                // Lấy thông tin từ overlay hiện tại
+                const overlayInfo = cameraOverlay.innerHTML;
+
+                // Vẽ overlay lên canvas
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(10, 10, canvas.width - 20, 100);
+                ctx.fillStyle = 'white';
+                ctx.font = '14px Arial';
+
+                // Chia thông tin thành các dòng và vẽ lên canvas
+                const lines = overlayInfo.split('<br>');
+                lines.forEach((line, index) => {
+                    ctx.fillText(line, 20, 30 + (index * 20));
+                });
+
                 canvas.toBlob((blob) => {
                     const reader = new FileReader();
                     reader.onloadend = () => resolve(reader.result);
@@ -297,7 +361,7 @@
         }
         async function handleCheckInOut(type) {
             showLoading();
-            const name = "Nguyễn Văn A"; // Thay thế bằng tên thực tế của người dùng
+            const name = "Nguyễn Văn b"; // Thay thế bằng tên thực tế của người dùng
             const currentTime = moment().tz("Asia/Ho_Chi_Minh");
             const date = currentTime.format('DD/MM/YYYY');
             const timeStr = currentTime.format('HH:mm:ss');
@@ -312,49 +376,55 @@
                     "HỌ VÀ TÊN": name,
                     "GHI CHÚ": `Check ${type} qua API`
                 };
-                if (existingRecord[0]){
-                if (type === 'in') {
-                    if (existingRecord[0]['ID CV'] === idChamCong) {
+                if (existingRecord[0]) {
+                    if (type === 'in') {
+                        if (existingRecord[0]['ID CV'] === idChamCong) {
 
-                        const confirmOverwrite = confirm(`Bạn đã check-in lúc ${existingRecord[0].IN}. Bạn có muốn ghi đè không?`);
-                        if (!confirmOverwrite) {
+                            const confirmOverwrite = confirm(`Bạn đã check-in lúc ${existingRecord[0].IN}. Bạn có muốn ghi đè không?`);
+                            if (!confirmOverwrite) {
+                                hideLoading();
+                                return;
+                            }
+                            newData["LỊCH SỬ IN"] = `${existingRecord[0]["LỊCH SỬ IN"] || ""};
+                         ${timeStr}`;
+                        } else {
+                            newData["LỊCH SỬ IN"] = timeStr;
+                        }
+                        newData["IN"] = timeStr;
+                        newData["HÌNH ẢNH IN"] = await captureImage();
+                        newData["ĐỊA CHỈ IN"] = await getLocation();
+                    } else if (type === 'out') {
+                        if (!existingRecord[0]) {
+                            showAlert("Không tìm thấy bản ghi check-in cho hôm nay. Không thể check-out.");
                             hideLoading();
                             return;
                         }
-                        newData["LỊCH SỬ IN"] = `${existingRecord[0]["LỊCH SỬ IN"] || ""};
-                         ${timeStr}`;
-                    } else {
-                        newData["LỊCH SỬ IN"] = timeStr;
+                        if (!existingRecord[0].IN) {
+                            showAlert("Bạn chưa check-in hôm nay. Không thể check-out.");
+                            hideLoading();
+                            return;
+                        }
+                        if (existingRecord[0].OUT) {
+                            const confirmOverwrite = confirm(`Bạn đã check-out lúc ${existingRecord[0].OUT}. Bạn có muốn ghi đè không?`);
+                            if (!confirmOverwrite) {
+                                hideLoading();
+                                return;
+                            }
+                            newData["LỊCH SỬ OUT"] = `${existingRecord[0]["LỊCH SỬ OUT"] || ""};
+                         ${name} Đã check out vào : (${date} ${timeStr})`;
+                        } else {
+                            newData["LỊCH SỬ OUT"] = `${name} Đã check out vào : (${date} ${timeStr})`;
+                        }
+                        newData["OUT"] = timeStr;
+                        newData["HÌNH ẢNH OUT"] = await captureImage();
+                        newData["ĐỊA CHỈ OUT"] = await getLocation();
                     }
+                } else {
+                    newData["LỊCH SỬ IN"] = timeStr;
                     newData["IN"] = timeStr;
                     newData["HÌNH ẢNH IN"] = await captureImage();
                     newData["ĐỊA CHỈ IN"] = await getLocation();
-                } else if (type === 'out') {
-                    if (!existingRecord[0]) {
-                        showAlert("Không tìm thấy bản ghi check-in cho hôm nay. Không thể check-out.");
-                        hideLoading();
-                        return;
-                    }
-                    if (!existingRecord[0].IN) {
-                        showAlert("Bạn chưa check-in hôm nay. Không thể check-out.");
-                        hideLoading();
-                        return;
-                    }
-                    if (existingRecord[0].OUT) {
-                        const confirmOverwrite = confirm(`Bạn đã check-out lúc ${existingRecord[0].OUT}. Bạn có muốn ghi đè không?`);
-                        if (!confirmOverwrite) {
-                            hideLoading();
-                            return;
-                        }
-                        newData["LỊCH SỬ OUT"] = `${existingRecord[0]["LỊCH SỬ OUT"] || ""};
-                         ${name} Đã check out vào : (${date} ${timeStr})`;
-                    } else {
-                        newData["LỊCH SỬ OUT"] = `${name} Đã check out vào : (${date} ${timeStr})`;
-                    }
-                    newData["OUT"] = timeStr;
-                    newData["HÌNH ẢNH OUT"] = await captureImage();
-                    newData["ĐỊA CHỈ OUT"] = await getLocation();
-                }}  
+                }
 
                 const action = existingRecord[0] ? 'Edit' : 'Add';
                 const response = await apiRequest('ChamCong', action, { Rows: [newData] });
