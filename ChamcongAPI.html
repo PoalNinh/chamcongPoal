@@ -259,6 +259,7 @@
 
         const showFullScreenMessage = (message, duration = 3000) => {
             alertBox.textContent = message;
+            alertBox.style.display = "block";
             alertBox.classList.add("fullscreen-message");
             setTimeout(() => {
                 alertBox.classList.remove("fullscreen-message");
@@ -293,7 +294,7 @@
         const checkExistingRecord = async (idChamCong) => {
             try {
                 return await apiRequest('ChamCong', 'Find', {}, {
-         
+
                     Selector: `Filter(ChamCong,[ID CV]="${idChamCong}")`
                 });
             } catch (error) {
@@ -441,7 +442,7 @@
             const timeStr = currentTime.format('HH:mm:ss');
             const idChamCong = `${fullName}${date}`;
             const datee = currentTime.format('YYYY-MM-DD');
-            
+
             try {
                 const existingRecord = await checkExistingRecord(idChamCong);
 
@@ -498,10 +499,18 @@
                 const action = existingRecord && existingRecord[0] ? 'Edit' : 'Add';
                 const response = await apiRequest('ChamCong', action, { Rows: [newData] });
 
-                if (response && response.Success) {
-                    showFullScreenMessage(`Đã gửi thông tin check-${type} thành công!`);
+                console.log('API Response:', response);
+                if (response && response.Rows && response.Rows.length > 0) {
+                    const sentData = response.Rows[0];
+                    if (sentData['ID CV'] === idChamCong && sentData['HỌ VÀ TÊN'] === fullName) {
+                        showFullScreenMessage(`Đã gửi thông tin check-${type} thành công!`);
+                    } else {
+                        console.warn('Dữ liệu gửi không khớp:', sentData);
+                        showAlert(`Dữ liệu đã được gửi nhưng có thể không chính xác. Vui lòng kiểm tra lại.`);
+                    }
                 } else {
-                    throw new Error('API request did not return a success status');
+                    console.error('API Error:', response);
+                    throw new Error(`API request failed: ${JSON.stringify(response)}`);
                 }
             } catch (error) {
                 console.error('API request failed:', error);
